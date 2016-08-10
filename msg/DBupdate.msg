@@ -1,0 +1,2 @@
+string macList
+string hwKeys
