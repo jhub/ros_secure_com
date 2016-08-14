@@ -51,7 +51,7 @@ def get_db(mac_address):
 	global MAC_hardwr_keys
 	self_hw_key			= MAC_hardwr_keys[mac_address]
 	db = {}
-	pudb.set_trace()  #For Debugging
+	#pudb.set_trace()  #For Debugging
 	for mac,hw_key in MAC_hardwr_keys.iteritems():
 		if(mac_address == mac): 							#skip one's own MAC
 			continue

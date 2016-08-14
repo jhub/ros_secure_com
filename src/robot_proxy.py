@@ -29,15 +29,9 @@ SAFE_TRNSFR_RATE		= 64 * 1000 #64 kB = 512 kb, suggested transfer speed
 TIMESTAMP_ALLOWANCE 	= 1e-5
 
 ETH_HEADER_LENGTH 		= 46
-PROXY_HEADER_LENGTH		= 26
+PROXY_HEADER_LENGTH		= 78
 SIGNATURE_LENGTH		= 16
 MAC_LENGTH				= 6
-
-ETH_HEADER_STRUCTURE 	='!6s6s2s32s'		#MAC(6),MAC(6),PROTOCOL(2),CHALLENGE(32)
-PROXY_HEADER_STRUCTURE 	='!16s6s4s'			#SIGNATURE, SOURCE_MAC, TIMESTAMP
-INTERFACE				= 'eth0'
-ROBOT_PROXY_PROTOCOL	= '\xF0\x0F'
-GTG_PROTOCOL			= 0x0003
 
 HELLO_MESSAGE 			= 'A'
 SUB_LIST 				= 'R'
@@ -46,6 +40,12 @@ HSE 					= robot_black_magic
 T_HDLR    				= topic_handler
 topic_skt 				= None
 db_enc 					= None
+
+ETH_HEADER_STRUCTURE 	='!6s6s2s32s'		#MAC(6),MAC(6),PROTOCOL(2),CHALLENGE(32)
+PROXY_HEADER_STRUCTURE 	='!6sd32s32s'		#SOURCE_MAC, TIMESTAMP (8bytes), new_C, new_R
+INTERFACE				= HSE.INTERFACE
+ROBOT_PROXY_PROTOCOL	= '\xF0\x0F'
+GTG_PROTOCOL			= 0x0003
 
 ###################################################PAYLOAD HANDLEING####################################################
 
@@ -72,55 +72,48 @@ def churn(mac_enc, new_CR):
 	dest_mac_enc 			= HSE.compute_hmac(mac_enc)
 	db_enc[dest_mac_enc] 	= HSE.enc_CR(new_CR)			#automatically creates entry if not already present!
 
-
 def within_accuracy(timestamp_packet, timestamp_rcv, data_length):
-	#Do other calculations to determine clock skew allowance
+	#Do other calculations to determine clock skew allowance. Must synchronize times for this to work.
 	skew_proj = data_length/SAFE_TRNSFR_RATE #clock skew, propagation delay, and proc. delay can also affect allowance
 	return  abs(timestamp_packet + skew_proj - timestamp_rcv) < TIMESTAMP_ALLOWANCE
 
 
-def MAC_msg_listener(arg):
-	try:
-		skt 			= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
-		skt.bind((INTERFACE, GTG_PROTOCOL))
-	except socket.error , msg:
-		print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-		sys.exit()
+def MAC_msg_listener(connection_skt):
+
 	while True:
-		packet 			= skt.recvfrom(65565)[0]
+		packet 			= connection_skt.recvfrom(65565)[0]
 		timestamp_rcv 	= time()
 
-		if packet > ETH_HEADER_LENGTH:
-			process_packet(skt,packet,timestamp_rcv)
+		if len(packet) >= ETH_HEADER_LENGTH:
+			process_packet(connection_skt,packet,timestamp_rcv)
 
 
 def process_packet(skt,packet,timestamp_rcv):
 	eth_header 							= packet[:ETH_HEADER_LENGTH]
 	dest_mac,src_mac,eth_protocol,ch 	= unpack(ETH_HEADER_STRUCTURE , eth_header)
-	if eth_protocol == ROBOT_PROXY_PROTOCOL:
+	if eth_protocol == ROBOT_PROXY_PROTOCOL and src_mac != HSE.MAC:
 		if dest_mac == HSE.MAC:
 			#pudb.set_trace() #For Debugging
 			process_directed_packet(skt,src_mac,ch,packet[ETH_HEADER_LENGTH:])
-		if dest_mac == BROADCAST_MAC and src_mac != HSE.MAC:
+		if dest_mac == BROADCAST_MAC:
 			process_broadcast(skt,src_mac,ch)
 
 
 def process_directed_packet(skt,src_mac,ch,proxy_msg):
 	try:
-		sg_msg 						= HSE.dec_msg(ch, proxy_msg)
+		msg 						= HSE.dec_msg(ch, proxy_msg)
 	except ValueError:
 		#Message not intended for this machine
 		return
-	proxy_header 					= sg_msg[:PROXY_HEADER_LENGTH]
-	sg,MAC_sender,timestamp 		= unpack(PROXY_HEADER_STRUCTURE, proxy_header)
-	if src_mac == MAC_sender and HSE.verify_msg(ch, sg, sg_msg[SIGNATURE_LENGTH:]): #\
-	#and within_accuracy(unpack('f',timestamp), timestamp_rcv, len(packet)):
-		pickle_array = loads(sg_msg[PROXY_HEADER_LENGTH:])
-		process_verified_payload(skt,src_mac,pickle_array[0],pickle_array[1])
+	proxy_header 					= msg[:PROXY_HEADER_LENGTH]
+	MAC_sender,ts, new_C, new_R		= unpack(PROXY_HEADER_STRUCTURE, proxy_header)
+	if src_mac == MAC_sender: # and HSE.verify_msg(ch, sg, sg_msg[SIGNATURE_LENGTH:]): #\ No need anymore
+	#and within_accuracy(unpack('f',ts), timestamp_rcv, len(packet)):
+		churn(src_mac, [new_C,new_R])			#Done BEFORE response to accomodate new agents
+		process_verified_payload(skt,src_mac,msg[PROXY_HEADER_LENGTH:])
 
 
-def process_verified_payload(skt,src_mac,new_CR,pickled_payload):
-	churn(src_mac, new_CR)													#Done BEFORE response to accomodate new agents
+def process_verified_payload(skt,src_mac,pickled_payload):									
 	payload = loads(pickled_payload)
 	if payload[0] == HELLO_MESSAGE or payload[0] == SUB_LIST:
 		if payload[0] == HELLO_MESSAGE:
@@ -141,23 +134,23 @@ def process_broadcast(skt,src_mac,pubs_hash):
 		renew_connection(skt,src_mac, pubs_hash)
 
 
-def send_packet(skt, dest_mac, enc_sg_msg):
+def send_packet(skt, dest_mac, enc_msg):
 	src_MAC 	= HSE.MAC
-	skt.send(dest_mac + src_MAC + ROBOT_PROXY_PROTOCOL + enc_sg_msg)
-
-
-def construct_message(payload, challenge, response):
-	pickle_array	= [HSE.new_CR(),dumps(payload,2)]
-	msg 			= HSE.MAC + pack('f',time()) + dumps(pickle_array,2)
-	sg 				= HSE.compute_hmac(msg, response)
-	msg_sg 			= sg + msg
-	return challenge + HSE.enc_msg(response, msg_sg)
+	skt.send(dest_mac + src_MAC + ROBOT_PROXY_PROTOCOL + enc_msg)
 
 
 def prep_send_packet(skt, dest_mac, payload):
 	CR 				= get_host_CR(dest_mac)
-	enc_sg_msg 		= construct_message(payload,CR[0], CR[1])
-	send_packet(skt, dest_mac, enc_sg_msg)
+	enc_msg 		= construct_message(payload,CR[0], CR[1])
+	send_packet(skt, dest_mac, enc_msg)
+
+
+def construct_message(payload, challenge, response):
+	pickle_array	= dumps(payload,2)
+	eth_header 		= HSE.MAC + pack('d',time()) + HSE.new_CR()
+	msg 			= eth_header + pickle_array if pickle_array is not None else eth_header
+	return challenge + HSE.enc_msg(response, msg)
+
 
 
 def get_host_CR(mac):
@@ -165,14 +158,10 @@ def get_host_CR(mac):
 	return HSE.dec_CR(db_enc[dest_mac_enc])
 
 
-def MAC_broadcaster(arg):
-	try:
-		skt 	= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
-		skt.bind((INTERFACE, 0))
-	except socket.error , msg:
-		print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1]
-		sys.exit()
+def MAC_broadcaster(broadcast_skt, tl_pub):
+
 	#pudb.set_trace() #For Debugging
+	BROADCAST_FREQUENCY		= rospy.Rate(1) #in Hz
 	while True:
 		T_HDLR.clear_ttls()
 		publisher_hash 			= get_self_publisher_hash()
@@ -181,9 +170,9 @@ def MAC_broadcaster(arg):
 		T_HDLR.get_all_ext_pubs(pubLists_msg)
 		
 		tl_pub.publish(pubLists_msg)
-		send_packet(skt, BROADCAST_MAC,publisher_hash)
+		send_packet(broadcast_skt, BROADCAST_MAC,publisher_hash)
 
-		sleep(BROADCAST_FREQUENCY)
+		BROADCAST_FREQUENCY.sleep()
 
 
 ####################################################TOPIC HANDLEING#####################################################
@@ -240,22 +229,29 @@ if __name__ == '__main__':
 	rospy.init_node('robot_proxy', anonymous=True)
 
 	try:
-		topic_skt 	= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
+		topic_skt 				= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
 		topic_skt.bind((INTERFACE, GTG_PROTOCOL))
+
+		broadcast_snd_skt 		= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
+		broadcast_snd_skt.bind((INTERFACE, 0))
+
+		connection_skt 			= socket.socket( socket.AF_PACKET , socket.SOCK_RAW , socket.ntohs(GTG_PROTOCOL)) #GTG protocol
+		connection_skt.bind((INTERFACE, GTG_PROTOCOL))
+
 	except socket.error , msg:
 		print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1] + " Are you su?"
 		sys.exit()
 
-	listener_thread 		= Thread(target = MAC_msg_listener, args = (10, ))
+	listener_thread 		= Thread(target = MAC_msg_listener, args = (connection_skt, ))
 	listener_thread.setDaemon(True)
 	listener_thread.start()
-
-	broadcast_thread 		= Thread(target = MAC_broadcaster, args = (10, ))
-	broadcast_thread.setDaemon(True)
-	broadcast_thread.start()
 
 	rospy.Subscriber("msg_proxy/Pickle_msg_out", PickleSend, Pickle_send_callback)
 
 	tl_pub = rospy.Publisher('msg_proxy/Host_lists', pubLists, queue_size=100)
+
+	broadcast_thread 		= Thread(target = MAC_broadcaster, args = (broadcast_snd_skt,tl_pub, ))
+	broadcast_thread.setDaemon(True)
+	broadcast_thread.start()
 
 	rospy.spin()
