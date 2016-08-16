@@ -176,7 +176,7 @@ def MAC_broadcaster(broadcast_skt, tl_pub):
 		pubLists_msg 			= pubLists()
 		T_HDLR.get_all_ext_pubs(pubLists_msg)
 		
-		tl_pub.publish(dumps(pubLists_msg,2))
+		tl_pub.publish(pubLists_msg)
 		send_packet(broadcast_skt, BROADCAST_MAC,publisher_hash)
 
 		BROADCAST_FREQUENCY.sleep()
