@@ -26,7 +26,7 @@ MAX_PUB_ERROR_COUNT 	= 3
 
 class topic_handler_obj(object):
 
-	def __init__(self, pickled_pubs_list):
+	def __init__(self):
 		self.PUBLISHERS 	= ''#loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
 		self.time_created	= time()
 
@@ -77,13 +77,13 @@ def update_connection(src_mac, pickled_pubs_list):
 		TOPIC_HND_LIST[src_mac].upd_pubs(pickled_pubs_list)
 	else:
 		print("Obtained new connection from: " + ":".join("{:02x}".format(ord(c)) for c in src_mac))
-		TOPIC_HND_LIST[src_mac] = topic_handler_obj(pickled_pubs_list)
+		TOPIC_HND_LIST[src_mac] = topic_handler_obj()
 	i_lock.release()
 
 
 def get_all_ext_pubs(pubLists_msg): #TODO: For internal nodes to know outer pub lists
 	for mac,th_obj in TOPIC_HND_LIST.iteritems():
-		#pudb.set_trace() #For Debugging
+		pudb.set_trace() #For Debugging
 		mlist 			= MACmlist()
 		mlist.MAC 		= hexlify(mac)
 		mlist.ttLists	= th_obj.get_publishers()
