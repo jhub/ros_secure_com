@@ -153,10 +153,14 @@ def subscribe_to(publist):
 	for tt_pair in publist:
 		#Forces topic to receive PickleSend to support future compatability
 		if tt_pair[1] == 'ros_secure_com/PickleSend':
-			subs_obj = rospy.Subscriber(tt_pair[0], PickleSend, robot_proxy.Pickle_send_callback)
+			subs_obj = rospy.Subscriber(tt_pair[0], PickleSend, Callback_pickle)
 			SELF_PUBLISHER_LIST.append([tt_pair,subs_obj]) #this c/b should be from parent
 			PUBLISHER_BF.add(tt_pair[0] + tt_pair[1])
 
+
+def setHandle(func):
+	global Callback_pickle
+	Callback_pickle = func
 			
 def unsubscribe_all(): #TODO: very wasteful, it would be nice to leave same subs alone
 	global SELF_PUBLISHER_LIST
