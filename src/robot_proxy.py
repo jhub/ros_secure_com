@@ -127,7 +127,7 @@ def process_verified_payload(skt,src_mac,pickled_payload, flags_int):
 			prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
 		update_connection(src_mac, payload)
 	else:
-		pudb.set_trace() #For Debugging
+		#pudb.set_trace() #For Debugging
 		process_payload(src_mac,payload)
 
 

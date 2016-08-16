@@ -144,7 +144,7 @@ def get_MACmlists(): #TODO: For external nodes to know self pub lists
 
 def update_ros_subscribers(publist):
 	global PUBLISHER_BF
-	print publist
+	#print publist
 	if not does_bf_contain_all(publist):
 		print("Adding new node!")
 		PUBLISHER_BF.clear_all()
