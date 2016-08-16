@@ -5,7 +5,6 @@ import threading
 import rosgraph.masterapi
 import hashlib
 import pudb
-import robot_proxy
 
 from cPickle				import loads, dumps
 from time 					import time

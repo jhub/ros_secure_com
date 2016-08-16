@@ -179,7 +179,7 @@ def MAC_broadcaster(broadcast_skt, tl_pub):
 		tl_pub.publish(pubLists_msg)
 		send_packet(broadcast_skt, BROADCAST_MAC,publisher_hash)
 
-		sleep(BROADCAST_FREQUENCY)
+		BROADCAST_FREQUENCY.sleep()
 
 
 ####################################################TOPIC HANDLEING#####################################################
@@ -249,6 +249,9 @@ if __name__ == '__main__':
 		print 'Socket could not be created. Error Code : ' + str(msg[0]) + ' Message ' + msg[1] + " Are you su?"
 		sys.exit()
 
+	tl_pub 	= rospy.Publisher('msg_proxy/Host_lists', pubLists, queue_size=100)
+	msg_pub	= rospy.Publisher('msg_proxy/Pickle_msg_out', PickleSend, queue_size=100)
+
 	listener_thread 		= Thread(target = MAC_msg_listener, args = (connection_skt, ))
 	listener_thread.setDaemon(True)
 	listener_thread.start()
@@ -256,8 +259,5 @@ if __name__ == '__main__':
 	broadcast_thread 		= Thread(target = MAC_broadcaster, args = (broadcast_snd_skt,tl_pub, ))
 	broadcast_thread.setDaemon(True)
 	broadcast_thread.start()
-
-	tl_pub 	= rospy.Publisher('msg_proxy/Host_lists', pubLists, queue_size=100)
-	msg_pub	= rospy.Publisher('msg_proxy/Pickle_msg_out', PickleSend, queue_size=100)
 
 	rospy.spin()
