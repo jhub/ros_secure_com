@@ -42,7 +42,7 @@ topic_skt 				= None
 db_enc 					= None
 
 ETH_HEADER_STRUCTURE 	='!6s6s2s32s'		#MAC(6),MAC(6),PROTOCOL(2),CHALLENGE(32)
-PROXY_HEADER_STRUCTURE 	='!6sd32s32s'		#SOURCE_MAC, TIMESTAMP (8bytes), new_C, new_R
+PROXY_HEADER_STRUCTURE 	='!1s6sd32s32s'		#:,SOURCE_MAC, TIMESTAMP (8bytes), new_C, new_R
 INTERFACE				= HSE.INTERFACE
 ROBOT_PROXY_PROTOCOL	= '\xF0\x0F'
 GTG_PROTOCOL			= 0x0003
@@ -51,12 +51,14 @@ GTG_PROTOCOL			= 0x0003
 
 
 def process_payload(src_mac,payload):
-	pudb.set_trace() #For Debugging
-	print("Hi!! Message received :D")
-	#TODO publish message on correct topic (hopefully one indicative of the src mac)
+	ps 					= PickleSend()
+	ps.MAC 				= src_mac
+	ps.pickled_message	= dumps(payload)
+	msg_pub.publish(ps)
 
 def Pickle_send_callback(Pickle_msg):
 	global topic_skt
+	global db_enc
 	message			= loads(Pickle_msg.pickled_message)
 	dest_mac		= Pickle_msg.MAC
 	dest_mac_enc	= HSE.compute_hmac(dest_mac)
@@ -64,6 +66,8 @@ def Pickle_send_callback(Pickle_msg):
 	if dest_mac_enc in db_enc and is_conn_open(dest_mac):
 		prep_send_packet(topic_skt, dest_mac, message)
 
+#attach to our topic handler
+T_HDLR.setHandle(Pickle_send_callback)
 
 ####################################################PACKET HANDLEING####################################################
 
@@ -115,12 +119,15 @@ def process_directed_packet(skt,src_mac,ch,proxy_msg):
 
 def process_verified_payload(skt,src_mac,pickled_payload):									
 	payload = loads(pickled_payload)
-	if payload[0] == HELLO_MESSAGE or payload[0] == SUB_LIST:
-		if payload[0] == HELLO_MESSAGE:
-			msg_to_send = SUB_LIST + get_self_pickled_publisher_list()
-			prep_send_packet(skt,src_mac, msg_to_send)
-		update_connection(src_mac, payload[1:])
-	else:
+	try:
+		if payload[0] == HELLO_MESSAGE or payload[0] == SUB_LIST:
+			if payload[0] == HELLO_MESSAGE:
+				msg_to_send = SUB_LIST + get_self_pickled_publisher_list()
+				prep_send_packet(skt,src_mac, msg_to_send)
+			update_connection(src_mac, payload[1:])
+		else:
+			process_payload(src_mac,payload)
+	except TypeError:
 		process_payload(src_mac,payload)
 
 
@@ -148,7 +155,7 @@ def prep_send_packet(skt, dest_mac, payload):
 def construct_message(payload, challenge, response):
 	pickle_array	= dumps(payload,2)
 	eth_header 		= HSE.MAC + pack('d',time()) + HSE.new_CR()
-	msg 			= eth_header + pickle_array if pickle_array is not None else eth_header
+	msg 			= eth_header + pickle_array
 	return challenge + HSE.enc_msg(response, msg)
 
 
@@ -172,7 +179,7 @@ def MAC_broadcaster(broadcast_skt, tl_pub):
 		tl_pub.publish(pubLists_msg)
 		send_packet(broadcast_skt, BROADCAST_MAC,publisher_hash)
 
-		BROADCAST_FREQUENCY.sleep()
+		sleep(BROADCAST_FREQUENCY)
 
 
 ####################################################TOPIC HANDLEING#####################################################
@@ -246,12 +253,11 @@ if __name__ == '__main__':
 	listener_thread.setDaemon(True)
 	listener_thread.start()
 
-	rospy.Subscriber("msg_proxy/Pickle_msg_out", PickleSend, Pickle_send_callback)
-
-	tl_pub = rospy.Publisher('msg_proxy/Host_lists', pubLists, queue_size=100)
-
 	broadcast_thread 		= Thread(target = MAC_broadcaster, args = (broadcast_snd_skt,tl_pub, ))
 	broadcast_thread.setDaemon(True)
 	broadcast_thread.start()
+
+	tl_pub 	= rospy.Publisher('msg_proxy/Host_lists', pubLists, queue_size=100)
+	msg_pub	= rospy.Publisher('msg_proxy/Pickle_msg_out', PickleSend, queue_size=100)
 
 	rospy.spin()
