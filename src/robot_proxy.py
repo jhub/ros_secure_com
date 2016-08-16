@@ -63,10 +63,11 @@ def Pickle_send_callback(Pickle_msg):
 	#pudb.set_trace() #For Debugging
 	message			= loads(Pickle_msg.pickled_message)
 	dest_mac		= Pickle_msg.MAC
-	dest_mac_enc	= HSE.compute_hmac(unhexlify(dest_mac))
+	u_dest_mac 		= unhexlify(dest_mac)
+	dest_mac_enc	= HSE.compute_hmac(u_dest_mac)
 	#Check that the robot is addressable (eg. has CR pair)
-	if dest_mac_enc in db_enc and is_conn_open(unhexlify(dest_mac)):
-		prep_send_packet(topic_skt, dest_mac, message)
+	if dest_mac_enc in db_enc and is_conn_open(u_dest_mac):
+		prep_send_packet(topic_skt, u_dest_mac, message)
 
 #attach to our topic handler
 T_HDLR.setHandle(Pickle_send_callback)
