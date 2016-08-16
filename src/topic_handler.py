@@ -26,8 +26,8 @@ MAX_PUB_ERROR_COUNT 	= 3
 
 class topic_handler_obj(object):
 
-	def __init__(self):
-		self.PUBLISHERS 	= ''#loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
+	def __init__(self, pickled_pubs_list):
+		self.PUBLISHERS 	= loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
 		self.time_created	= time()
 
 
@@ -77,7 +77,7 @@ def update_connection(src_mac, pickled_pubs_list):
 		TOPIC_HND_LIST[src_mac].upd_pubs(pickled_pubs_list)
 	else:
 		print("Obtained new connection from: " + ":".join("{:02x}".format(ord(c)) for c in src_mac))
-		TOPIC_HND_LIST[src_mac] = topic_handler_obj()
+		TOPIC_HND_LIST[src_mac] = topic_handler_obj(pickled_pubs_list)
 	i_lock.release()
 
 
@@ -144,7 +144,7 @@ def get_MACmlists(): #TODO: For external nodes to know self pub lists
 
 def update_ros_subscribers(publist):
 	global PUBLISHER_BF
-	print publist
+	#print publist
 	if not does_bf_contain_all(publist):
 		print("Adding new node!")
 		PUBLISHER_BF.clear_all()
