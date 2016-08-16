@@ -83,7 +83,7 @@ def update_connection(src_mac, pickled_pubs_list):
 
 def get_all_ext_pubs(pubLists_msg): #TODO: For internal nodes to know outer pub lists
 	for mac,th_obj in TOPIC_HND_LIST.iteritems():
-		pudb.set_trace() #For Debugging
+		#pudb.set_trace() #For Debugging
 		mlist 			= MACmlist()
 		mlist.MAC 		= hexlify(mac)
 		mlist.ttLists	= th_obj.get_publishers()
