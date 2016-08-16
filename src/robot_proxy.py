@@ -29,12 +29,12 @@ SAFE_TRNSFR_RATE		= 64 * 1000 #64 kB = 512 kb, suggested transfer speed
 TIMESTAMP_ALLOWANCE 	= 1e-5
 
 ETH_HEADER_LENGTH 		= 46
-PROXY_HEADER_LENGTH		= 78
+PROXY_HEADER_LENGTH		= 79
 SIGNATURE_LENGTH		= 16
 MAC_LENGTH				= 6
 
-HELLO_MESSAGE 			= 'A'
-SUB_LIST 				= 'R'
+HELLO_MESSAGE 			= 128 	#1000 0000
+SUB_LIST 				= 64	#0100 0000
 
 HSE 					= robot_black_magic
 T_HDLR    				= topic_handler
@@ -42,7 +42,7 @@ topic_skt 				= None
 db_enc 					= None
 
 ETH_HEADER_STRUCTURE 	='!6s6s2s32s'		#MAC(6),MAC(6),PROTOCOL(2),CHALLENGE(32)
-PROXY_HEADER_STRUCTURE 	='!1s6sd32s32s'		#:,SOURCE_MAC, TIMESTAMP (8bytes), new_C, new_R
+PROXY_HEADER_STRUCTURE 	='!1s6sd32s32s'		#HELLO:SUBLIST:::::::,SOURCE_MAC, TIMESTAMP (8bytes), new_C, new_R
 INTERFACE				= HSE.INTERFACE
 ROBOT_PROXY_PROTOCOL	= '\xF0\x0F'
 GTG_PROTOCOL			= 0x0003
@@ -97,7 +97,7 @@ def process_packet(skt,packet,timestamp_rcv):
 	dest_mac,src_mac,eth_protocol,ch 	= unpack(ETH_HEADER_STRUCTURE , eth_header)
 	if eth_protocol == ROBOT_PROXY_PROTOCOL and src_mac != HSE.MAC:
 		if dest_mac == HSE.MAC:
-			#pudb.set_trace() #For Debugging
+			pudb.set_trace() #For Debugging
 			process_directed_packet(skt,src_mac,ch,packet[ETH_HEADER_LENGTH:])
 		if dest_mac == BROADCAST_MAC:
 			process_broadcast(skt,src_mac,ch)
@@ -105,25 +105,25 @@ def process_packet(skt,packet,timestamp_rcv):
 
 def process_directed_packet(skt,src_mac,ch,proxy_msg):
 	try:
-		msg 						= HSE.dec_msg(ch, proxy_msg)
+		msg 							= HSE.dec_msg(ch, proxy_msg)
 	except ValueError:
 		#Message not intended for this machine
 		return
-	proxy_header 					= msg[:PROXY_HEADER_LENGTH]
-	MAC_sender,ts, new_C, new_R		= unpack(PROXY_HEADER_STRUCTURE, proxy_header)
+	proxy_header 						= msg[:PROXY_HEADER_LENGTH]
+	flgs,MAC_sender,ts, new_C, new_R	= unpack(PROXY_HEADER_STRUCTURE, proxy_header)
 	if src_mac == MAC_sender: # and HSE.verify_msg(ch, sg, sg_msg[SIGNATURE_LENGTH:]): #\ No need anymore
 	#and within_accuracy(unpack('f',ts), timestamp_rcv, len(packet)):
 		churn(src_mac, [new_C,new_R])			#Done BEFORE response to accomodate new agents
-		process_verified_payload(skt,src_mac,msg[PROXY_HEADER_LENGTH:])
+		process_verified_payload(skt,src_mac,msg[PROXY_HEADER_LENGTH:], ord(flgs))
 
 
-def process_verified_payload(skt,src_mac,pickled_payload):									
+def process_verified_payload(skt,src_mac,pickled_payload, flags_int):									
 	payload = loads(pickled_payload)
 	try:
-		if payload[0] == HELLO_MESSAGE or payload[0] == SUB_LIST:
-			if payload[0] == HELLO_MESSAGE:
-				msg_to_send = SUB_LIST + get_self_pickled_publisher_list()
-				prep_send_packet(skt,src_mac, msg_to_send)
+		if flgs & HELLO_MESSAGE > 0 or flgs & SUB_LIST > 0:
+			if flgs & HELLO_MESSAGE > 0:
+				msg_to_send = get_self_pickled_publisher_list()
+				prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
 			update_connection(src_mac, payload[1:])
 		else:
 			process_payload(src_mac,payload)
@@ -135,8 +135,8 @@ def process_broadcast(skt,src_mac,pubs_hash):
 	#pudb.set_trace() #For Debugging
 	enc_mac 	= HSE.compute_hmac(src_mac)
 	if not is_conn_open(src_mac) and enc_mac in db_enc:					#ignore unknown macs (They will auth later)
-		msg_to_send = HELLO_MESSAGE + get_self_pickled_publisher_list()
-		prep_send_packet(skt,src_mac, msg_to_send)
+		msg_to_send =  get_self_pickled_publisher_list()
+		prep_send_packet(skt,src_mac, msg_to_send, HELLO_MESSAGE)
 	elif is_conn_open(src_mac):
 		renew_connection(skt,src_mac, pubs_hash)
 
@@ -146,15 +146,15 @@ def send_packet(skt, dest_mac, enc_msg):
 	skt.send(dest_mac + src_MAC + ROBOT_PROXY_PROTOCOL + enc_msg)
 
 
-def prep_send_packet(skt, dest_mac, payload):
+def prep_send_packet(skt, dest_mac, payload, flags = 0):
 	CR 				= get_host_CR(dest_mac)
-	enc_msg 		= construct_message(payload,CR[0], CR[1])
+	enc_msg 		= construct_message(payload,CR[0], CR[1], flags)
 	send_packet(skt, dest_mac, enc_msg)
 
 
-def construct_message(payload, challenge, response):
+def construct_message(payload, challenge, response, flags):
 	pickle_array	= dumps(payload,2)
-	eth_header 		= HSE.MAC + pack('d',time()) + HSE.new_CR()
+	eth_header 		= chr(flags) + HSE.MAC + pack('d',time()) + HSE.new_CR()
 	msg 			= eth_header + pickle_array
 	return challenge + HSE.enc_msg(response, msg)
 
@@ -195,7 +195,7 @@ def update_connection(src_mac, pickled_pubs_list):
 
 def renew_connection(skt,src_mac, pubs_hash):
 	if not T_HDLR.has_same_pubs_hash(src_mac, pubs_hash):
-		prep_send_packet(skt,src_mac, SUB_LIST)
+		prep_send_packet(skt,src_mac, None, SUB_LIST)
 
 
 def get_self_pickled_publisher_list():
