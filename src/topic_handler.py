@@ -9,7 +9,7 @@ import pudb
 from cPickle				import loads, dumps
 from time 					import time
 from pybloomfilter 			import BloomFilter
-from binascii 				import unhexlify
+from binascii 				import unhexlify, hexlify
 
 from ros_secure_com.msg 	import PickleSend, pubLists, MACmlist, topicTypeList
 
@@ -65,7 +65,7 @@ def clear_ttls():
 	i_lock.acquire()
 	global TOPIC_HND_LIST
 	global TTLVALUE
-	TOPIC_HND_LIST = {key: value for key, value in TOPIC_HND_LIST.items() if not value.has_expired(TTLVALUE)}
+	TOPIC_HND_LIST = {key: value for key, value in TOPIC_HND_LIST.items() if not value.has_expired(TTLVALUE, key)}
 	#print(TOPIC_HND_LIST)
 	i_lock.release()
 
