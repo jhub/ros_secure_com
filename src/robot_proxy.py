@@ -120,8 +120,8 @@ def process_directed_packet(skt,src_mac,ch,proxy_msg):
 def process_verified_payload(skt,src_mac,pickled_payload, flags_int):									
 	payload = loads(pickled_payload)
 	try:
-		if flgs & HELLO_MESSAGE > 0 or flgs & SUB_LIST > 0:
-			if flgs & HELLO_MESSAGE > 0:
+		if flags_int & HELLO_MESSAGE > 0 or flags_int & SUB_LIST > 0:
+			if flags_int & HELLO_MESSAGE > 0:
 				msg_to_send = get_self_pickled_publisher_list()
 				prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
 			update_connection(src_mac, payload[1:])
