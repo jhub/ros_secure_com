@@ -8,6 +8,7 @@ import topic_handler
 
 from threading 				import Thread
 from time 					import time, sleep
+from binascii 				import unhexlify
 from cPickle				import loads, dumps
 from struct					import unpack,pack
 
@@ -59,9 +60,10 @@ def process_payload(src_mac,payload):
 def Pickle_send_callback(Pickle_msg):
 	global topic_skt
 	global db_enc
+	#pudb.set_trace() #For Debugging
 	message			= loads(Pickle_msg.pickled_message)
 	dest_mac		= Pickle_msg.MAC
-	dest_mac_enc	= HSE.compute_hmac(dest_mac)
+	dest_mac_enc	= HSE.compute_hmac(unhexlify(dest_mac))
 	#Check that the robot is addressable (eg. has CR pair)
 	if dest_mac_enc in db_enc and is_conn_open(dest_mac):
 		prep_send_packet(topic_skt, dest_mac, message)
@@ -97,7 +99,6 @@ def process_packet(skt,packet,timestamp_rcv):
 	dest_mac,src_mac,eth_protocol,ch 	= unpack(ETH_HEADER_STRUCTURE , eth_header)
 	if eth_protocol == ROBOT_PROXY_PROTOCOL and src_mac != HSE.MAC:
 		if dest_mac == HSE.MAC:
-			#pudb.set_trace() #For Debugging
 			process_directed_packet(skt,src_mac,ch,packet[ETH_HEADER_LENGTH:])
 		if dest_mac == BROADCAST_MAC:
 			process_broadcast(skt,src_mac,ch)
@@ -119,15 +120,13 @@ def process_directed_packet(skt,src_mac,ch,proxy_msg):
 
 def process_verified_payload(skt,src_mac,pickled_payload, flags_int):									
 	payload = loads(pickled_payload)
-	try:
-		if flags_int & HELLO_MESSAGE > 0 or flags_int & SUB_LIST > 0:
-			if flags_int & HELLO_MESSAGE > 0:
-				msg_to_send = get_self_pickled_publisher_list()
-				prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
-			update_connection(src_mac, payload)
-		else:
-			process_payload(src_mac,payload)
-	except TypeError:
+	if flags_int & HELLO_MESSAGE > 0 or flags_int & SUB_LIST > 0:
+		if flags_int & HELLO_MESSAGE > 0:
+			msg_to_send = get_self_pickled_publisher_list()
+			prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
+		update_connection(src_mac, payload)
+	else:
+		pudb.set_trace() #For Debugging
 		process_payload(src_mac,payload)
 
 
@@ -186,7 +185,7 @@ def MAC_broadcaster(broadcast_skt, tl_pub):
 
 
 def is_conn_open(src_mac):
-	T_HDLR.is_conn_open(src_mac)
+	return T_HDLR.is_conn_open(src_mac)
 
 
 def update_connection(src_mac, pickled_pubs_list):
