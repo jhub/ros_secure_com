@@ -124,7 +124,7 @@ def process_verified_payload(skt,src_mac,pickled_payload, flags_int):
 			if flags_int & HELLO_MESSAGE > 0:
 				msg_to_send = get_self_pickled_publisher_list()
 				prep_send_packet(skt,src_mac, msg_to_send, SUB_LIST)
-			update_connection(src_mac, payload[1:])
+			update_connection(src_mac, payload)
 		else:
 			process_payload(src_mac,payload)
 	except TypeError:
