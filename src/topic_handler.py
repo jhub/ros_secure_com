@@ -32,7 +32,7 @@ class topic_handler_obj(object):
 
 
 	def upd_pubs(self, pickled_pubs_list):
-		if pickled_pubs_list != '':
+		if pickled_pubs_list != None:
 			self.PUBLISHERS 	= loads(pickled_pubs_list)
 		self.renew_TTL()
 
@@ -144,7 +144,7 @@ def get_MACmlists(): #TODO: For external nodes to know self pub lists
 
 def update_ros_subscribers(publist):
 	global PUBLISHER_BF
-	#print publist
+	print publist
 	if not does_bf_contain_all(publist):
 		print("Adding new node!")
 		PUBLISHER_BF.clear_all()
