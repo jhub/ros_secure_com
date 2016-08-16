@@ -97,7 +97,7 @@ def process_packet(skt,packet,timestamp_rcv):
 	dest_mac,src_mac,eth_protocol,ch 	= unpack(ETH_HEADER_STRUCTURE , eth_header)
 	if eth_protocol == ROBOT_PROXY_PROTOCOL and src_mac != HSE.MAC:
 		if dest_mac == HSE.MAC:
-			pudb.set_trace() #For Debugging
+			#pudb.set_trace() #For Debugging
 			process_directed_packet(skt,src_mac,ch,packet[ETH_HEADER_LENGTH:])
 		if dest_mac == BROADCAST_MAC:
 			process_broadcast(skt,src_mac,ch)

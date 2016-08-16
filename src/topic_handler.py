@@ -27,23 +27,33 @@ MAX_PUB_ERROR_COUNT 	= 3
 class topic_handler_obj(object):
 
 	def __init__(self, pickled_pubs_list):
-		self.PUBLISHERS 	= loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
+		self.PUBLISHERS 	= ''#loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
 		self.time_created	= time()
 
 
 	def upd_pubs(self, pickled_pubs_list):
-		self.PUBLISHERS 	= loads(pickled_pubs_list)
-		self.time_created	= time()
+		if pickled_pubs_list != '':
+			self.PUBLISHERS 	= loads(pickled_pubs_list)
+		self.renew_TTL()
 
 	def get_hash(self):
-		return unhexlify(hashlib.sha256(self.PUBLISHERS).hexdigest())
+		concat = ''
+		for l in self.PUBLISHERS:
+			concat = concat + l.topic + l.type
+		return unhexlify(hashlib.sha256(concat).hexdigest())
 
 
 	def get_publishers(self):
 		return self.PUBLISHERS
 
 
-	def has_expired(self, TTL_value):
+	def renew_TTL(self):
+		self.time_created	= time()
+
+
+	def has_expired(self, TTL_value,src_mac):
+		if time() - self.time_created > TTL_value:
+			print ("removing connection: " + ":".join("{:02x}".format(ord(c)) for c in src_mac))
 		return time() - self.time_created > TTL_value
 
 
@@ -75,7 +85,7 @@ def get_all_ext_pubs(pubLists_msg): #TODO: For internal nodes to know outer pub 
 	for mac,th_obj in TOPIC_HND_LIST.iteritems():
 		#pudb.set_trace() #For Debugging
 		mlist 			= MACmlist()
-		mlist.MAC 		= "".join("{:02x}".format(ord(c)) for c in mac)
+		mlist.MAC 		= hexlify(mac)
 		mlist.ttLists	= th_obj.get_publishers()
 		pubLists_msg.MACmlists.append(mlist)
 
@@ -91,9 +101,6 @@ def has_same_pubs_hash(src_mac, pubs_hash):
 def get_pubs_hash(mac):
 	return TOPIC_HND_LIST[mac].get_hash() 		if is_conn_open(mac) else '\x00'
 
-
-def get_pickled_publisher_list(mac):
-	dumps(get_publisher_list(mac))
 
 
 #######################################################LOCAL PUBS#######################################################
