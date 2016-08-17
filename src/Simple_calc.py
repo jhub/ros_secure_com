@@ -11,7 +11,6 @@ from binascii 				import hexlify
 from os						import urandom
 
 Publishers 		=	{}
-MESSAGE_TO_S 	= None
 Strt_Colc		= False
 
 def pickle_msg_callback(msg):
@@ -23,7 +22,7 @@ def pickle_msg_callback(msg):
 def Host_update_callback(pubLists):
 	global MESSAGE_TO_S
 	if MESSAGE_TO_S == None:
-		MESSAGE_TO_S 	=	urandom(1400)
+		MESSAGE_TO_S 	=	urandom(1323)
 		i 				= String()
 		i.data 			= MESSAGE_TO_S
 		msg 			= dumps(i)
@@ -41,13 +40,15 @@ def Host_update_callback(pubLists):
 
 			while True:
 				pub.publish(ps)
-				sleep(10)
 
 
 if __name__ == '__main__':
+	global MESSAGE_TO_S
 	if len(sys.argv) > 1:
-		global MESSAGE_TO_S
 		MESSAGE_TO_S	= " ".join(sys.argv[1:])
+	else:
+		MESSAGE_TO_S 	= None
+
 	#pudb.set_trace() #For Debugging
 
 	rospy.init_node('send_my_string', anonymous=True)
