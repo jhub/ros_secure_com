@@ -27,7 +27,7 @@ MAX_PUB_ERROR_COUNT 	= 3
 class topic_handler_obj(object):
 
 	def __init__(self, pickled_pubs_list):
-		self.PUBLISHERS 	= loads(pickled_pubs_list) if not None else '' #TODO make into custum msg format: topicTypeList[]
+		self.PUBLISHERS 	= loads(pickled_pubs_list) #TODO make into custum msg format: topicTypeList[]
 		self.time_created	= time()
 
 
