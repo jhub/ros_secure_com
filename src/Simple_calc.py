@@ -8,18 +8,25 @@ from std_msgs.msg  			import String
 from ros_secure_com.msg 	import PickleSend, pubLists, MACmlist, topicTypeList
 from cPickle				import loads, dumps
 from binascii 				import hexlify
+from os						import urandom
 
 Publishers 		=	{}
 MESSAGE_TO_S 	= None
+Strt_Colc		= False
 
 def pickle_msg_callback(msg):
-	print("got: " + str(loads(msg.pickled_message).data) + "  from mac: " + hexlify(msg.MAC))
+	if not Strt_Colc:
+		Strt_Colc = True
+		print("Getting data")
 
 
 def Host_update_callback(pubLists):
 	global MESSAGE_TO_S
 	if MESSAGE_TO_S == None:
-		MESSAGE_TO_S 	=	"Default msg"
+		MESSAGE_TO_S 	=	urandom(1400)
+		i 				= String()
+		i.data 			= MESSAGE_TO_S
+		msg 			= dumps(i)
 
 	global Publishers
 	for maclist in pubLists.MACmlists:
@@ -27,26 +34,14 @@ def Host_update_callback(pubLists):
 			pub = rospy.Publisher('msg_proxy/ext/' + maclist.MAC, PickleSend, queue_size=100)
 			Publishers[maclist.MAC] = pub
 			#publish
-			i = String()
-			i.data = MESSAGE_TO_S
-			try:
-				pub.publish(i)
-			except TypeError:
-				print("Evaded incorrect publish")
-			ps = PickleSend()
+
+			ps 					= PickleSend()
 			ps.MAC 				= maclist.MAC
-			ps.pickled_message	= dumps(i)
+			ps.pickled_message	= msg
 
-			sleep(10)
-
-			pub.publish(ps)
-			print("Published!")
-
-			sleep(10)
-
-			#pub.unregister()
-			#del pub
-			#print("unregistered!")
+			while True:
+				pub.publish(ps)
+				sleep(10)
 
 
 if __name__ == '__main__':
